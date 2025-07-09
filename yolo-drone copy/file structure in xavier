@@ -1,0 +1,7 @@
+~/drone_detection/
+    ├── utils/
+    │   └── pixhawk_connection.py    # Pixhawk communication code
+    ├── detection_server.py          # Your main YOLO detection code
+    └── requirements.txt             # Dependencies
+
+
