@@ -1,0 +1,204 @@
+.map-wrapper {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.map-error,
+.map-loading {
+  padding: 1rem;
+  text-align: center;
+}
+
+.map-error {
+  color: #e74c3c;
+}
+
+/* Override Google Maps container styles */
+.gm-style {
+  position: absolute !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.gm-style > div {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Make sure controls stay visible */
+.gm-style .gm-style-cc,
+.gm-style .gmnoprint {
+  z-index: 1000;
+}
+
+/* Search Box */
+.search-box {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  padding: 10px;
+  font-size: 16px;
+  width: 300px;
+  height: 35px;
+  border: 2px solid #ccc;
+  border-radius: 5px;
+  background-color: white;
+  z-index: 20;
+  color: black;
+}
+
+/* Add custom styling for grid lines */
+.gm-style .grid-line {
+  stroke-color: #FF0000;
+  stroke-opacity: 0.6;
+  stroke-weight: 2;
+}
+
+
+/* Drone Camera Feed Box */
+
+
+.drone-camera-feed {
+  position: absolute !important;
+  top: 100px !important;  /* Initial position */
+  right: 60px !important;   /* Initial position */
+  width: 300px !important;
+  height: 225px !important;
+  background: rgba(0, 0, 0, 0.85) !important;
+  border-radius: 8px !important;
+  overflow: hidden !important;
+  z-index: 9999 !important; /* Increased z-index */
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1) !important;
+  user-select: none !important;
+  touch-action: none !important;
+  pointer-events: all !important; /* Ensure it captures all mouse events */
+}
+
+.camera-feed-header {
+  background-color: rgba(44, 62, 80, 0.9) !important;
+  padding: 8px 12px !important;
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  color: white !important;
+}
+
+.camera-feed-title {
+  font-size: 14px !important;
+  font-weight: bold !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+
+.live-indicator {
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  font-size: 12px !important;
+}
+
+.live-dot {
+  width: 8px !important;
+  height: 8px !important;
+  background-color: #e74c3c !important;
+  border-radius: 50% !important;
+  animation: pulse 1.5s infinite !important;
+}
+
+.camera-feed-content {
+  width: 100%; /* Adjust container width as needed */
+  height: 100%; /* Adjust container height as needed */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+}
+
+.live-feed {
+  width: 100%; /* Makes the feed width fit the container */
+  height: 100%; /* Makes the feed height fit the container */
+  object-fit: cover; /* Ensures the feed fills the container without distortion */
+}
+
+
+.camera-feed-controls {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+}
+
+.live-indicator {
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  font-size: 12px !important;
+}
+
+.fullscreen-button {
+  background: none !important;
+  border: none !important;
+  padding: 4px !important;
+  cursor: pointer !important;
+  color: white !important;
+  border-radius: 4px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: background-color 0.2s !important;
+}
+
+.fullscreen-button:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+/* Custom styles for drawing controls */
+
+
+
+/* Custom styles for drawing controls */
+/* Custom styles for drawing controls */
+.custom-drawing-controls {
+  position: absolute;
+  top: 10px; /* Adjust for positioning below other controls */
+  right: 10px;
+  display: flex;
+  flex-direction: column;
+  z-index: 1000;
+}
+
+.custom-drawing-button {
+  padding: 10px;
+  font-size: 18px;
+  width: 40px;
+  height: 40px;
+  border: 1px solid #ccc;
+  background-color: white;
+  border-radius: 5px;
+  cursor: pointer;
+  text-align: center;
+  line-height: 1.2;
+}
+
+.custom-drawing-button:hover {
+  background-color: #f0f0f0;
+}
+
+
