@@ -18,24 +18,6 @@
   color: #e74c3c;
 }
 
-/* Override Google Maps container styles */
-.gm-style {
-  position: absolute !important;
-  width: 100% !important;
-  height: 100% !important;
-}
-
-.gm-style > div {
-  width: 100% !important;
-  height: 100% !important;
-}
-
-/* Make sure controls stay visible */
-.gm-style .gm-style-cc,
-.gm-style .gmnoprint {
-  z-index: 1000;
-}
-
 /* Search Box */
 .search-box {
   position: absolute;
@@ -52,31 +34,60 @@
   color: black;
 }
 
-/* Add custom styling for grid lines */
-.gm-style .grid-line {
-  stroke-color: #FF0000;
-  stroke-opacity: 0.6;
-  stroke-weight: 2;
+/* Drawing Controls */
+.custom-control-group {
+  background: white;
+  border-radius: 4px;
+  box-shadow: 0 0 10px 2px rgba(0,0,0,.1);
+  display: flex;
+  flex-direction: column;
 }
 
+.custom-draw-button,
+.custom-stop-button {
+  background: white;
+  border: none;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  min-width: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s ease;
+}
 
-/* Drone Camera Feed Box */
+.custom-draw-button:hover,
+.custom-stop-button:hover {
+  background: #f0f0f0;
+}
 
+.custom-draw-button:first-child {
+  border-top-left-radius: 4px;
+  border-top-right-radius: 4px;
+}
 
+.custom-stop-button:last-child {
+  border-bottom-left-radius: 4px;
+  border-bottom-right-radius: 4px;
+}
+
+/* Drone Camera Feed */
 .drone-camera-feed {
   position: absolute !important;
-  top: 100px !important;  /* Initial position */
-  right: 60px !important;   /* Initial position */
+  top: 100px !important;
+  right: 60px !important;
   width: 300px !important;
   height: 225px !important;
   background: rgba(0, 0, 0, 0.85) !important;
   border-radius: 8px !important;
   overflow: hidden !important;
-  z-index: 9999 !important; /* Increased z-index */
+  z-index: 9999 !important;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1) !important;
   user-select: none !important;
   touch-action: none !important;
-  pointer-events: all !important; /* Ensure it captures all mouse events */
+  pointer-events: all !important;
+  transition: transform 0.1s ease !important;
 }
 
 .camera-feed-header {
@@ -96,6 +107,12 @@
   gap: 8px !important;
 }
 
+.camera-feed-controls {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+}
+
 .live-indicator {
   display: flex !important;
   align-items: center !important;
@@ -112,8 +129,8 @@
 }
 
 .camera-feed-content {
-  width: 100%; /* Adjust container width as needed */
-  height: 100%; /* Adjust container height as needed */
+  width: 100%;
+  height: calc(100% - 40px); /* Account for header height */
   display: flex;
   justify-content: center;
   align-items: center;
@@ -121,23 +138,9 @@
 }
 
 .live-feed {
-  width: 100%; /* Makes the feed width fit the container */
-  height: 100%; /* Makes the feed height fit the container */
-  object-fit: cover; /* Ensures the feed fills the container without distortion */
-}
-
-
-.camera-feed-controls {
-  display: flex !important;
-  align-items: center !important;
-  gap: 12px !important;
-}
-
-.live-indicator {
-  display: flex !important;
-  align-items: center !important;
-  gap: 4px !important;
-  font-size: 12px !important;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .fullscreen-button {
@@ -158,47 +161,43 @@
 }
 
 @keyframes pulse {
-  0% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.5;
-  }
-  100% {
-    opacity: 1;
-  }
+  0% { opacity: 1; }
+  50% { opacity: 0.5; }
+  100% { opacity: 1; }
 }
 
-/* Custom styles for drawing controls */
+/* MapLibre specific overrides */
+.maplibregl-ctrl-group {
+  box-shadow: 0 0 10px 2px rgba(0,0,0,.1);
+}
 
+.maplibregl-canvas {
+  outline: none;
+}
 
-
-/* Custom styles for drawing controls */
-/* Custom styles for drawing controls */
-.custom-drawing-controls {
+.map-style-switcher {
   position: absolute;
-  top: 10px; /* Adjust for positioning below other controls */
-  right: 10px;
-  display: flex;
-  flex-direction: column;
+  top: 20px;
+  right: 120px; /* Position next to drawing controls */
   z-index: 1000;
 }
 
-.custom-drawing-button {
-  padding: 10px;
-  font-size: 18px;
-  width: 40px;
-  height: 40px;
-  border: 1px solid #ccc;
-  background-color: white;
+.style-select {
+  padding: 8px 12px;
+  font-size: 14px;
+  border: 2px solid #ccc;
   border-radius: 5px;
+  background-color: white;
   cursor: pointer;
-  text-align: center;
-  line-height: 1.2;
+  min-width: 150px;
 }
 
-.custom-drawing-button:hover {
-  background-color: #f0f0f0;
+.style-select:hover {
+  border-color: #4CAF50;
 }
 
-
+.style-select:focus {
+  outline: none;
+  border-color: #4CAF50;
+  box-shadow: 0 0 5px rgba(76, 175, 80, 0.3);
+}
