@@ -1,38 +1,277 @@
-import React, { useState, useCallback, useRef, forwardRef, useImperativeHandle } from 'react';
-import { GoogleMap, Polyline, useLoadScript } from '@react-google-maps/api';
+import React, { useState, useCallback, useRef, forwardRef, useImperativeHandle, useEffect } from 'react';
+import { Map } from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
 import axios from 'axios';
 import './MapComponent.css';
 
 
-const libraries = ['drawing', 'places'];
 
 const MapComponent = forwardRef(({ onDispatchDrone }, ref) => {
   const [selectedArea, setSelectedArea] = useState(null);
-  const [drawingManager, setDrawingManager] = useState(null);
   const [gridLines, setGridLines] = useState([]);
   const [selectedLocation, setSelectedLocation] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [map, setMap] = useState(null);
+  const [isDrawing, setIsDrawing] = useState(false);
   
   // Add states for draggable camera feed
   const [cameraPosition, setCameraPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const dragRef = useRef({ startX: 0, startY: 0 });
 
-  const center = {
-    lat: 17.39716,
-    lng: 78.49040,
-  };
-
-  const { isLoaded, loadError } = useLoadScript({
-    googleMapsApiKey: 'AIzaSyB-6NuWru71NBpaRmAaiEZjRmTJnUfQBbQ',
-    libraries,
-  });
-
+  const mapContainer = useRef(null);
   const searchBoxRef = useRef(null);
-  const mapRef = useRef(null);
-  const autocompleteRef = useRef(null);
+  const mapInstanceRef = useRef(null);
 
-  // Handle drag start
+  const center = [78.49040, 17.39716]; // [lng, lat] for MapLibre
+
+  // Draw grid function
+  const drawGrid = useCallback((area, mapInstance) => {
+    // Remove existing grid
+    if (mapInstance.getSource('grid')) {
+      mapInstance.removeLayer('grid-lines');
+      mapInstance.removeSource('grid');
+    }
+
+    const gridLines = [];
+    const latStep = (area.north - area.south) / 10;
+    const lngStep = (area.east - area.west) / 50;
+
+    // Create vertical lines
+    for (let i = 0; i <= 50; i++) {
+      const lng = area.west + lngStep * i;
+      gridLines.push({
+        type: 'Feature',
+        geometry: {
+          type: 'LineString',
+          coordinates: [
+            [lng, area.south],
+            [lng, area.north]
+          ]
+        }
+      });
+    }
+
+    // Add grid source and layer
+    mapInstance.addSource('grid', {
+      type: 'geojson',
+      data: {
+        type: 'FeatureCollection',
+        features: gridLines
+      }
+    });
+
+    mapInstance.addLayer({
+      id: 'grid-lines',
+      type: 'line',
+      source: 'grid',
+      paint: {
+        'line-color': '#00FF00',
+        'line-width': 1,
+        'line-opacity': 0.6
+      }
+    });
+  }, []);
+
+  // Setup drawing controls
+  const setupDrawingControls = useCallback((mapInstance) => {
+    // Create custom drawing controls
+    const drawButton = document.createElement('button');
+    drawButton.innerHTML = '📐 Draw';
+    drawButton.className = 'maplibregl-ctrl-icon custom-draw-button';
+    drawButton.title = 'Draw Rectangle';
+    
+    const stopButton = document.createElement('button');
+    stopButton.innerHTML = '✋ Stop';
+    stopButton.className = 'maplibregl-ctrl-icon custom-stop-button';
+    stopButton.title = 'Stop Drawing';
+
+    // Create control container
+    const controlGroup = document.createElement('div');
+    controlGroup.className = 'maplibregl-ctrl maplibregl-ctrl-group custom-control-group';
+    controlGroup.appendChild(drawButton);
+    controlGroup.appendChild(stopButton);
+
+    // Add to map container (not the map itself)
+    const mapContainer = mapInstance.getContainer();
+    mapContainer.appendChild(controlGroup);
+    
+    // Position the controls
+    controlGroup.style.position = 'absolute';
+    controlGroup.style.top = '10px';
+    controlGroup.style.right = '10px';
+    controlGroup.style.zIndex = '1000';
+
+    let startPoint = null;
+    let isCurrentlyDrawing = false;
+
+    const startDrawing = () => {
+      isCurrentlyDrawing = true;
+      setIsDrawing(true);
+      mapInstance.getCanvas().style.cursor = 'crosshair';
+      drawButton.style.backgroundColor = '#4CAF50';
+      drawButton.style.color = 'white';
+    };
+
+    const stopDrawing = () => {
+      isCurrentlyDrawing = false;
+      setIsDrawing(false);
+      mapInstance.getCanvas().style.cursor = '';
+      startPoint = null;
+      drawButton.style.backgroundColor = '';
+      drawButton.style.color = '';
+    };
+
+    drawButton.addEventListener('click', startDrawing);
+    stopButton.addEventListener('click', stopDrawing);
+
+    // Handle rectangle drawing
+    const handleMouseDown = (e) => {
+      if (!isCurrentlyDrawing) return;
+      e.preventDefault();
+      startPoint = [e.lngLat.lng, e.lngLat.lat];
+      console.log('Drawing started at:', startPoint);
+    };
+
+    const handleMouseMove = (e) => {
+      if (!isCurrentlyDrawing || !startPoint) return;
+      
+      const currentPoint = [e.lngLat.lng, e.lngLat.lat];
+      
+      // Remove existing rectangle
+      if (mapInstance.getSource('rectangle')) {
+        try {
+          mapInstance.removeLayer('rectangle-fill');
+          mapInstance.removeLayer('rectangle-line');
+          mapInstance.removeSource('rectangle');
+        } catch (error) {
+          // Source might not exist, continue
+        }
+      }
+
+      // Create rectangle coordinates
+      const rectangleCoords = [
+        [startPoint[0], startPoint[1]], // SW
+        [currentPoint[0], startPoint[1]], // SE
+        [currentPoint[0], currentPoint[1]], // NE
+        [startPoint[0], currentPoint[1]], // NW
+        [startPoint[0], startPoint[1]], // Close
+      ];
+
+      // Add rectangle source and layers
+      mapInstance.addSource('rectangle', {
+        type: 'geojson',
+        data: {
+          type: 'Feature',
+          geometry: {
+            type: 'Polygon',
+            coordinates: [rectangleCoords]
+          }
+        }
+      });
+
+      mapInstance.addLayer({
+        id: 'rectangle-fill',
+        type: 'fill',
+        source: 'rectangle',
+        paint: {
+          'fill-color': '#00FF00',
+          'fill-opacity': 0.3
+        }
+      });
+
+      mapInstance.addLayer({
+        id: 'rectangle-line',
+        type: 'line',
+        source: 'rectangle',
+        paint: {
+          'line-color': '#00FF00',
+          'line-width': 2
+        }
+      });
+    };
+
+    const handleMouseUp = (e) => {
+      if (!isCurrentlyDrawing || !startPoint) return;
+      
+      const endPoint = [e.lngLat.lng, e.lngLat.lat];
+      
+      // Set selected area
+      const area = {
+        north: Math.max(startPoint[1], endPoint[1]),
+        south: Math.min(startPoint[1], endPoint[1]),
+        east: Math.max(startPoint[0], endPoint[0]),
+        west: Math.min(startPoint[0], endPoint[0])
+      };
+      
+      console.log('Area selected:', area);
+      setSelectedArea(area);
+      drawGrid(area, mapInstance);
+      
+      stopDrawing();
+    };
+
+    // Add event listeners
+    mapInstance.on('mousedown', handleMouseDown);
+    mapInstance.on('mousemove', handleMouseMove);
+    mapInstance.on('mouseup', handleMouseUp);
+
+    // Store cleanup function
+    return () => {
+      mapInstance.off('mousedown', handleMouseDown);
+      mapInstance.off('mousemove', handleMouseMove);
+      mapInstance.off('mouseup', handleMouseUp);
+      if (controlGroup.parentNode) {
+        controlGroup.parentNode.removeChild(controlGroup);
+      }
+    };
+  }, [drawGrid, setIsDrawing, setSelectedArea]);
+
+  // Initialize map
+  useEffect(() => {
+    if (!mapContainer.current || mapInstanceRef.current) return;
+
+    try {
+      const mapInstance = new Map({
+        container: mapContainer.current,
+        style: 'https://api.maptiler.com/maps/satellite/style.json?key=SgOq97w6pvP5GUqakLj6',
+        center: center,
+        zoom: 18,
+      });
+
+      mapInstanceRef.current = mapInstance;
+
+      mapInstance.on('load', () => {
+        console.log('Map loaded successfully');
+        setMap(mapInstance);
+        
+        // Add drawing functionality
+        const cleanup = setupDrawingControls(mapInstance);
+        
+        // Store cleanup function for later use
+        mapInstance._drawingCleanup = cleanup;
+      });
+
+      mapInstance.on('error', (e) => {
+        console.error('Map error:', e);
+      });
+
+    } catch (error) {
+      console.error('Failed to initialize map:', error);
+    }
+
+    return () => {
+      if (mapInstanceRef.current) {
+        if (mapInstanceRef.current._drawingCleanup) {
+          mapInstanceRef.current._drawingCleanup();
+        }
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+    };
+  }, [setupDrawingControls]);
+
+  // Handle drag functions (same as original)
   const handleMouseDown = (e) => {
     setIsDragging(true);
     dragRef.current = {
@@ -40,45 +279,38 @@ const MapComponent = forwardRef(({ onDispatchDrone }, ref) => {
       startY: e.pageY - cameraPosition.y
     };
     e.preventDefault();
-    e.stopPropagation(); // Prevent text selection while dragging
+    e.stopPropagation();
   };
 
-  // Handle dragging
-const handleMouseMove = useCallback((e) => {
-  if (!isDragging) return;
+  const handleMouseMove = useCallback((e) => {
+    if (!isDragging) return;
 
-  const newX = e.pageX - dragRef.current.startX;
-  const newY = e.pageY - dragRef.current.startY;
+    const newX = e.pageX - dragRef.current.startX;
+    const newY = e.pageY - dragRef.current.startY;
 
-  // Get map container boundaries
-  const mapContainer = document.querySelector('.map-wrapper');
-  const cameraFeed = document.querySelector('.drone-camera-feed');
-  
-  if (mapContainer && cameraFeed) {
-    const mapRect = mapContainer.getBoundingClientRect();
-    const feedRect = cameraFeed.getBoundingClientRect();
+    const mapContainer = document.querySelector('.map-wrapper');
+    const cameraFeed = document.querySelector('.drone-camera-feed');
 
-    // Constrain within map boundaries
-    const maxX = mapRect.width - feedRect.width;
-    const maxY = mapRect.height - feedRect.height;
-    const minY = 70; // Minimum Y position to avoid search bar
+    if (mapContainer && cameraFeed) {
+      const mapRect = mapContainer.getBoundingClientRect();
+      const feedRect = cameraFeed.getBoundingClientRect();
 
-    setCameraPosition({
-      x: Math.min(Math.max(0, newX), maxX),
-      y: Math.min(Math.max(minY, newY), maxY)
-    });
-  }
-}, [isDragging]);
+      const maxX = mapRect.width - feedRect.width;
+      const maxY = mapRect.height - feedRect.height;
+      const minY = 70;
 
+      setCameraPosition({
+        x: Math.min(Math.max(0, newX), maxX),
+        y: Math.min(Math.max(minY, newY), maxY)
+      });
+    }
+  }, [isDragging]);
 
-  
-  // Handle drag end
   const handleMouseUp = () => {
     setIsDragging(false);
   };
 
-  // Add event listeners for dragging
-  React.useEffect(() => {
+  useEffect(() => {
     if (isDragging) {
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
@@ -89,136 +321,45 @@ const handleMouseMove = useCallback((e) => {
     };
   }, [isDragging, handleMouseMove]);
 
-  useImperativeHandle(ref, () => ({
-    handleDispatchDrone: () => {
-      if (selectedArea) {
-        dispatchDroneToArea(selectedArea);
-      } else {
-        onDispatchDrone('Please select an area on the map first');
-      }
-    }
-  }));
-
-  const mapContainerStyle = {
-    width: '100%',
-    height: '100%',
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  };
-
-  const mapOptions = {
-    zoom: 18,
-    center: center,
-    mapTypeId: 'satellite',
-    mapTypeControl: false,
-    streetViewControl: false,
-    fullscreenControl: true,
-    zoomControl: true,
-  };
-
-  const onLoad = useCallback((map) => {
-    if (typeof window !== 'undefined' && window.google && window.google.maps) {
-      const drawingManagerInstance = new window.google.maps.drawing.DrawingManager({
-        drawingMode: null,
-        drawingControl: false,
-      });
-  
-      drawingManagerInstance.setMap(map);
-      setDrawingManager(drawingManagerInstance);
-  
-      // Create custom buttons for "Draw Rectangle" and "Stop Drawing"
-      const drawRectangleButton = document.createElement('button');
-      drawRectangleButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="black">
-        <rect x="4" y="4" width="16" height="16" />
-      </svg>`;
-      drawRectangleButton.className = 'custom-drawing-button';
+  // Search functionality using OpenStreetMap Nominatim (free)
+  const handleSearch = async (query) => {
+    if (!query.trim()) return;
+    
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`
+      );
+      const data = await response.json();
       
-      const stopDrawingButton = document.createElement('button');
-      stopDrawingButton.innerHTML = '&#9995;';
-      stopDrawingButton.className = 'custom-drawing-button';
-  
-      drawRectangleButton.addEventListener('click', () => {
-        drawingManagerInstance.setDrawingMode(window.google.maps.drawing.OverlayType.RECTANGLE);
-      });
-  
-      stopDrawingButton.addEventListener('click', () => {
-        drawingManagerInstance.setDrawingMode(null);
-      });
-  
-      const buttonContainer = document.createElement('div');
-      buttonContainer.className = 'custom-drawing-controls';
-      buttonContainer.appendChild(drawRectangleButton);
-      buttonContainer.appendChild(stopDrawingButton);
-  
-      map.controls[window.google.maps.ControlPosition.RIGHT_TOP].push(buttonContainer);
-  
-      window.google.maps.event.addListener(drawingManagerInstance, 'rectanglecomplete', (rectangle) => {
-        const bounds = rectangle.getBounds();
-        const selectedBounds = bounds.toJSON();
-        setSelectedArea(selectedBounds);
-        drawGrid(selectedBounds);
-      });
-    }
-  }, []);
-
-  const onUnmount = useCallback(() => {
-    if (drawingManager) {
-      drawingManager.setMap(null);
-    }
-  }, [drawingManager]);
-
-  const drawGrid = (area) => {
-    const gridLinesArray = [];
-    const latStep = (area.north - area.south) / 10;
-    const lngStep = (area.east - area.west) / 50;
-  
-    for (let i = 0; i <= 50; i++) {
-      const lng = area.west + lngStep * i;
-      const latStart = area.south;
-      const latEnd = area.north;
-  
-      gridLinesArray.push([
-        { lat: latStart, lng },
-        { lat: latEnd, lng }
-      ]);
-    }
-  
-    setGridLines(gridLinesArray);
-  };
-
-  const handleSearch = useCallback(() => {
-    if (typeof window !== 'undefined' && window.google && window.google.maps) {
-      if (searchBoxRef.current && !autocompleteRef.current) {
-        autocompleteRef.current = new window.google.maps.places.Autocomplete(
-          searchBoxRef.current,
-          { types: ['geocode'] }
-        );
-
-        autocompleteRef.current.addListener('place_changed', () => {
-          const place = autocompleteRef.current.getPlace();
-          if (place.geometry) {
-            const { lat, lng } = place.geometry.location;
-            setSelectedLocation({ lat: lat(), lng: lng() });
-            mapRef.current.panTo(place.geometry.location);
-            setSearchTerm('');
-          } else {
-            alert("No details available for the selected place.");
-          }
-        });
+      if (data.length > 0) {
+        const { lat, lon } = data[0];
+        const location = [parseFloat(lon), parseFloat(lat)];
+        
+        if (map) {
+          map.flyTo({
+            center: location,
+            zoom: 15
+          });
+        }
+        
+        setSelectedLocation({ lat: parseFloat(lat), lng: parseFloat(lon) });
+        setSearchTerm('');
       }
+    } catch (error) {
+      console.error('Search error:', error);
     }
-  }, []);
+  };
 
   const handleSearchInputChange = (e) => {
     setSearchTerm(e.target.value);
-    if (!autocompleteRef.current) {
-      handleSearch(); // Initialize Autocomplete only if not already set up
-    }
   };
 
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    handleSearch(searchTerm);
+  };
+
+  // Dispatch drone function (same as original)
   const dispatchDroneToArea = async (area) => {
     try {
       const requestData = {
@@ -241,28 +382,32 @@ const handleMouseMove = useCallback((e) => {
     }
   };
 
-  if (loadError) {
-    return <div className="map-error">Error loading maps</div>;
-  }
-
-  if (!isLoaded) {
-    return <div className="map-loading">Loading maps...</div>;
-  }
+  useImperativeHandle(ref, () => ({
+    handleDispatchDrone: () => {
+      if (selectedArea) {
+        dispatchDroneToArea(selectedArea);
+      } else {
+        onDispatchDrone('Please select an area on the map first');
+      }
+    }
+  }));
 
   return (
     <div className="map-wrapper">
-      {/* Search input with controlled value */}
-      <input
-        ref={searchBoxRef}
-        type="text"
-        placeholder="Search a place"
-        className="search-box"
-        value={searchTerm} // Controlled input
-        onChange={handleSearchInputChange} // Update search term as user types
-      />
+      {/* Search input */}
+      <form onSubmit={handleSearchSubmit}>
+        <input
+          ref={searchBoxRef}
+          type="text"
+          placeholder="Search a place"
+          className="search-box"
+          value={searchTerm}
+          onChange={handleSearchInputChange}
+        />
+      </form>
 
       {/* Draggable Drone Camera Feed */}
-      <div 
+      <div
         className="drone-camera-feed"
         style={{
           transform: `translate(${cameraPosition.x}px, ${cameraPosition.y}px)`,
@@ -283,7 +428,7 @@ const handleMouseMove = useCallback((e) => {
               <div className="live-dot"></div>
               LIVE
             </div>
-            <button 
+            <button
               className="fullscreen-button"
               onClick={() => window.open('/camera-feed', '_blank')}
               title="Open in fullscreen"
@@ -305,37 +450,27 @@ const handleMouseMove = useCallback((e) => {
           </div>
         </div>
         <div className="camera-feed-content">
-    <img 
-        src="http://127.0.0.1:5001/video-feed" 
-        alt="Drone Camera Feed" 
-        className="live-feed" 
-    />
-</div>
-
-
-
+          <img
+            src="http://127.0.0.1:5001/video-feed"
+            alt="Drone Camera Feed"
+            className="live-feed"
+          />
+        </div>
       </div>
 
-      <GoogleMap
-        ref={mapRef}
-        mapContainerStyle={mapContainerStyle}
-        options={mapOptions}
-        onLoad={onLoad}
-        onUnmount={onUnmount}
-        center={selectedLocation || center}
-      >
-        {gridLines.map((line, index) => (
-          <Polyline
-            key={index}
-            path={line}
-            options={{
-              strokeColor: '#00FF00',
-              strokeOpacity: 0.6,
-              strokeWeight: 2,
-            }}
-          />
-        ))}
-      </GoogleMap>
+      {/* MapLibre container */}
+      <div
+        ref={mapContainer}
+        style={{
+          width: '100%',
+          height: '100%',
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+        }}
+      />
     </div>
   );
 });
